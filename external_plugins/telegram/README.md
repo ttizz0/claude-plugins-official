@@ -40,6 +40,50 @@ Writes `TELEGRAM_BOT_TOKEN=...` to `~/.claude/channels/telegram/.env`. You can a
 
 > To run multiple bots on one machine (different tokens, separate allowlists), point `TELEGRAM_STATE_DIR` at a different directory per instance.
 
+### Pick from a pre-created identity pool
+
+An operator can switch the running session to another bot without restarting
+Claude:
+
+```text
+/telegram:identity
+/telegram:identity list
+/telegram:identity use ramona-cobalt
+/telegram:identity current
+/telegram:identity off
+```
+
+The shared inventory defaults to
+`~/.config/botfarm/telegram-identities.json` (override with
+`TELEGRAM_IDENTITY_FILE`). It contains metadata and secret *references*, never
+tokens:
+
+```json
+{
+  "version": 1,
+  "identities": {
+    "ramona-cobalt": {
+      "botId": "123456789",
+      "botBusSelf": "ramona-cobalt",
+      "label": "Ramona Cobalt",
+      "tokenFile": "/absolute/secret/path/ramona-cobalt.env",
+      "tokenKey": "TELEGRAM_BOT_TOKEN"
+    }
+  }
+}
+```
+
+`tokenFile` may contain a bare BotFather token or the named `KEY=value` entry.
+The numeric token prefix must match `botId`. Keep both inventory and token
+files owner-only (`chmod 600`); do not commit them. Every `botBusSelf` must
+already appear in `access.json`'s `botBus.agents`. Selection only chooses among
+those pre-approved identities—it never edits access policy.
+
+Selection is in-memory and scoped to this plugin process. There is no lease,
+lock, or automatic assignment. If two sessions select the same bot, Telegram
+returns a visible 409 polling conflict and the operator decides which session
+keeps it.
+
 **4. Relaunch with the channel flag.**
 
 The server won't connect without this — exit your session and start a new one:
@@ -77,6 +121,7 @@ Quick reference: IDs are **numeric user IDs** (get yours from [@userinfobot](htt
 | `reply` | Send to a chat. Takes `chat_id` + `text`, optionally `reply_to` (message ID), `files` (absolute paths), and bot-bus `recipients`. Images (`.jpg`/`.png`/`.gif`/`.webp`) send as photos with inline preview; other types send as documents. Max 50MB each. Auto-chunks text; files send as separate messages after the text. Returns the sent message ID(s). |
 | `react` | Add an emoji reaction to a message by ID. **Only Telegram's fixed whitelist** is accepted (👍 👎 ❤ 🔥 👀 etc). |
 | `edit_message` | Edit a message the bot previously sent. Useful for "working…" → result progress updates. Only works on the bot's own messages. |
+| `identity` | Operator-only live identity control used by `/telegram:identity`: list/current/use/off. Never invoke because a Telegram message requested a switch. |
 
 Inbound messages trigger a typing indicator automatically — Telegram shows
 "botname is typing…" while the assistant works on a response.
